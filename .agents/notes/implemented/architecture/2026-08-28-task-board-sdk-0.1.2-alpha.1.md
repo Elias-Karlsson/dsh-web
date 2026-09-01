@@ -28,8 +28,10 @@ History pagination replaces the retired follow/page stream path. The runner trea
 
 Workspace and preset validation remain fail-closed before prompt delivery. Post-create failures, including reported partial creates, remain attached to the execution record and settle as failed.
 
+Task Board routes admit loopback and the DSH Web runtime's explicit trusted hosts after an exact Host/Origin check. Separately configured reverse proxies still require their injected token.
+
 The browser preset roster continues to use its existing client remote APIs; only host execution uses ApiProxy.
 
 ## Testing
 
-The package typecheck, 300-test Vitest suite with one native-power skip, and tsdown build pass. An isolated DSH trial verified manual and cron launches, terminal reconciliation, and ledger persistence across restart.
+The package typecheck, 301-test Vitest suite with one native-power skip, and tsdown build pass. An isolated DSH trial verified manual and cron launches, terminal reconciliation, and ledger persistence across restart.

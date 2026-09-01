@@ -13,13 +13,15 @@ const HEARTBEAT_MS = 15_000
 /** Header replaced by an authenticated same-host reverse proxy. */
 export const TASK_BOARD_PROXY_TOKEN_HEADER = 'x-dsh-task-board-proxy-token'
 
-/** Optional authenticated reverse-proxy access layered over the loopback default. */
+/** Explicit DSH Web hosts and optional authenticated reverse-proxy access. */
 export interface TaskBoardRouteAccess {
+  trustedHosts?: readonly string[]
   trustedProxyHosts?: readonly string[]
   proxyToken?: string
 }
 
 interface ResolvedRouteAccess {
+  trustedHosts: ReadonlySet<string>
   trustedProxyHosts: ReadonlySet<string>
   proxyToken?: string
 }
@@ -42,18 +44,22 @@ function parseAuthority(authority: string): { canonical: string; url: URL } | un
 }
 
 function resolveAccess(access: TaskBoardRouteAccess): ResolvedRouteAccess {
-  const trustedProxyHosts = new Set<string>()
-  for (const authority of access.trustedProxyHosts ?? []) {
-    const parsed = parseAuthority(authority)
-    if (parsed === undefined || parsed.canonical !== authority.toLowerCase()) {
-      throw new Error(`task-board: trustedProxyHosts entry ${JSON.stringify(authority)} is not a canonical host[:port] authority`)
+  const parseHosts = (authorities: readonly string[], name: string): ReadonlySet<string> => {
+    const hosts = new Set<string>()
+    for (const authority of authorities) {
+      const parsed = parseAuthority(authority)
+      if (parsed === undefined || parsed.canonical !== authority.toLowerCase()) {
+        throw new Error(`task-board: ${name} entry ${JSON.stringify(authority)} is not a canonical host[:port] authority`)
+      }
+      hosts.add(parsed.canonical)
     }
-    trustedProxyHosts.add(parsed.canonical)
+    return hosts
   }
-  if (trustedProxyHosts.size > 0 && (access.proxyToken === undefined || access.proxyToken === '')) {
-    throw new Error('task-board: authenticated proxy hosts require a non-empty proxy token')
+  return {
+    trustedHosts: parseHosts(access.trustedHosts ?? [], 'trustedHosts'),
+    trustedProxyHosts: parseHosts(access.trustedProxyHosts ?? [], 'trustedProxyHosts'),
+    ...(access.proxyToken === undefined ? {} : { proxyToken: access.proxyToken }),
   }
-  return { trustedProxyHosts, ...(access.proxyToken === undefined ? {} : { proxyToken: access.proxyToken }) }
 }
 
 /**
@@ -91,8 +97,9 @@ function matchesToken(candidate: string | string[] | undefined, expected: string
  * marker: a bare local curl without any browser signal cannot exercise the
  * agent control plane (a forged Origin does pass the marker — it is a
  * tripwire, the socket/Host/origin-equality checks carry the authority).
- * Authenticated proxies must be explicitly allowlisted and replace the
- * internal token header after their own authentication step.
+ * Explicit DSH Web trusted hosts arrive through the same loopback listener and
+ * pass an exact Host/Origin check. A separately configured proxy requires its
+ * injected token.
  */
 export function isTrustedTaskBoardRequest(req: IncomingMessage, access: ResolvedRouteAccess): boolean {
   if (!browserSameOriginMarker(req)) return false
@@ -101,9 +108,9 @@ export function isTrustedTaskBoardRequest(req: IncomingMessage, access: Resolved
   const host = req.headers.host
   if (typeof host !== 'string') return false
   const parsed = parseAuthority(host)
-  if (parsed === undefined || parsed.canonical !== host.toLowerCase()) return false
-  if (!access.trustedProxyHosts.has(parsed.canonical) || !sameAuthority(req, parsed.url)) return false
-  return matchesToken(req.headers[TASK_BOARD_PROXY_TOKEN_HEADER], access.proxyToken)
+  if (parsed === undefined || parsed.canonical !== host.toLowerCase() || !sameAuthority(req, parsed.url)) return false
+  if (access.trustedHosts.has(parsed.canonical)) return true
+  return access.trustedProxyHosts.has(parsed.canonical) && matchesToken(req.headers[TASK_BOARD_PROXY_TOKEN_HEADER], access.proxyToken)
 }
 
 async function readBody(req: IncomingMessage): Promise<{ raw: string; value: unknown }> {

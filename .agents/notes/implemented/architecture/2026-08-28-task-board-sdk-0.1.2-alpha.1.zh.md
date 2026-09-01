@@ -28,8 +28,10 @@ Status: implemented
 
 工作区和预设校验仍在 prompt 投递前 fail closed。create 后失败（包括已报告的部分 create）仍附着在 execution 记录上并结算为 failed。
 
+Task Board 路由在精确 Host/Origin 检查后接受 loopback 和 DSH Web runtime 的显式 trusted host。另行配置的反向代理仍需其注入 token。
+
 浏览器 preset roster 继续使用现有的 client remote API；只有 Host execution 使用 ApiProxy。
 
 ## Testing
 
-包 typecheck、包含一个 native-power skip 的 300 个 Vitest 测试以及 tsdown build 都通过。独立 DSH trial 验证了手动和 cron 启动、终态对账以及重启后的 ledger 持久化。
+包 typecheck、包含一个 native-power skip 的 301 个 Vitest 测试以及 tsdown build 都通过。独立 DSH trial 验证了手动和 cron 启动、终态对账以及重启后的 ledger 持久化。

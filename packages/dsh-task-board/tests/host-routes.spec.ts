@@ -130,6 +130,32 @@ describe('task-board HTTP routes', () => {
     }
   })
 
+  it('accepts an explicit DSH Web trusted host without a proxy token', async () => {
+    const service = {
+      snapshot: () => snapshot,
+      apply,
+      subscribe: () => () => undefined,
+    } as unknown as TaskBoardHostService
+    const routes = makeTaskBoardRoutes(service, { trustedHosts: ['eliass-macbook-air.tail278fee.ts.net:3080'] })
+    const proxy = createServer((req, res) => {
+      const route = routes.find(candidate => candidate.path === new URL(req.url ?? '/', 'http://local').pathname)
+      if (route === undefined) { res.writeHead(404); res.end(); return }
+      void route.handler(req, res)
+    })
+    await new Promise<void>(resolve => { proxy.listen(0, '127.0.0.1', resolve) })
+    const address = proxy.address()
+    if (address === null || typeof address === 'string') throw new Error('trusted-host test server did not bind')
+    try {
+      expect(await requestStatus(`http://127.0.0.1:${address.port}/api/task-board/state`, {
+        host: 'eliass-macbook-air.tail278fee.ts.net:3080',
+        origin: 'http://eliass-macbook-air.tail278fee.ts.net:3080',
+        'sec-fetch-site': 'same-origin',
+      })).toBe(200)
+    } finally {
+      await new Promise<void>((resolve, reject) => { proxy.close(error => { if (error) reject(error); else resolve() }) })
+    }
+  })
+
   it('enforces the 64 KiB ordinary-action limit', async () => {
     const response = await fetch(`${base}/api/task-board/action`, {
       method: 'POST',
