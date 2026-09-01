@@ -26,7 +26,7 @@
 
 ## 架构与协议
 
-- `src/index.ts` 通过官方 `@deepseek-ai/dsh-api-gateway`、`@deepseek-ai/dsh-workspace` 与 `@deepseek-ai/dsh-host-webserver` SDK 挂载 Host 服务。
+- `src/index.ts` 通过 DSH Host 本地的 `apiProxy`、工作区注册表、命令分发器和 web server 挂载 Host 服务。runner 直接调用当前的类型化会话与 agent 预设 API，不使用已退役的 Typert 会话网关。
 - `src/host-ledger.ts` 串行动作，并用临时文件加原子 rename 持久化 `{ schemaVersion: 3, revision, tasks, scheduler, recentRequests }`。
 - `src/host-service.ts` 负责 cron tick、错过触发跳过、runner 启动、重启对账和电源保护理由。
 - `src/client/host-api.ts` 单次导入旧浏览器数据、提交幂等动作，并把 Host snapshot 当作唯一已确认 UI 状态。
@@ -86,7 +86,7 @@ macOS 后端启动 `/usr/bin/caffeinate -i -w <host-pid>`，绝不请求 `-d`。
 
 ## 构建与测试
 
-需要 Node 20 或更高版本及官方 NPM SDK 包；不使用 DSH 源码 checkout。
+需要 Node 20 或更高版本。本 fork 需要 DSH Web Host 挂载 `@deepseek-ai/dsh-host-apiproxy`；这是 Host 本地集成，不是兼容旧 DSH gateway 版本的独立适配层。
 
 ```sh
 pnpm --filter @linxin666/dsh-client-ui-task-board typecheck
@@ -118,7 +118,3 @@ pnpm --filter @linxin666/dsh-client-ui-task-board build
 - Linux 需要 systemd-logind 及允许当前用户取得 idle block lock 的策略；容器、WSL、无 system bus 或非 systemd 系统可能显示 `unsupported` 或 `error`。桌面环境是否把 logind idle lock 与显示器空闲联动属于其自身策略，插件不请求屏保或显示器 inhibitor。
 - 已启用计划会从未来触发点之前持续持锁，因此可能增加电池消耗。
 - Host 执行消耗与普通 DSH agent 会话相同的 API 额度。
-
-## 数据遥测
-
-浏览器半区每个 UTC 日向 dsh-market.com 发送一次匿名安装心跳：仅含一个 localStorage 随机 ID 与本包名，无其他数据。服务端只存储该 ID 的加盐哈希，不存 IP，且只暴露聚合计数。完整契约见 [docs/telemetry.md](../../docs/telemetry.md)。

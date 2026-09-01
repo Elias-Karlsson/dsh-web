@@ -26,7 +26,7 @@ A hot-pluggable DeepSeek Harness (DSH) Web GUI plugin with a Host-authoritative 
 
 ## Architecture and protocol
 
-- `src/index.ts` mounts the Host service through the official `@deepseek-ai/dsh-api-gateway`, `@deepseek-ai/dsh-workspace`, and `@deepseek-ai/dsh-host-webserver` SDKs.
+- `src/index.ts` mounts the Host service through DSH's host-local `apiProxy`, workspace registry, command dispatcher, and web server. The runner calls the current typed session and agent-preset API directly; it does not use the retired Typert session gateway.
 - `src/host-ledger.ts` serializes actions and persists `{ schemaVersion: 3, revision, tasks, scheduler, recentRequests }` through a temporary file plus atomic rename.
 - `src/host-service.ts` owns cron ticks, missed-trigger skipping, runner launch, restart reconciliation, and power reasons.
 - `src/client/host-api.ts` imports legacy browser data once, submits idempotent actions, and treats Host snapshots as the only confirmed UI state.
@@ -86,7 +86,7 @@ On macOS the backend starts `/usr/bin/caffeinate -i -w <host-pid>` and never req
 
 ## Build and test
 
-Node 20 or newer and the official NPM SDK packages are required; no DSH source checkout is used.
+Node 20 or newer is required. This fork requires a DSH Web host that mounts `@deepseek-ai/dsh-host-apiproxy`; it is a host-local integration, not a standalone compatibility layer for older DSH gateway releases.
 
 ```sh
 pnpm --filter @linxin666/dsh-client-ui-task-board typecheck
@@ -118,7 +118,3 @@ Set `DSH_POWER_SMOKE=1` to opt into the native helper smoke test on Windows, mac
 - Linux requires systemd-logind and policy permission for the current user to acquire an idle block lock. Containers, WSL, hosts without a system bus, and non-systemd systems may report `unsupported` or `error`. Whether a desktop also associates a logind idle lock with display idleness is desktop policy; the plugin does not request a screensaver or display inhibitor.
 - Keeping enabled schedules armed may increase battery consumption because protection starts before their future trigger time.
 - Host execution consumes the same API quota as an ordinary DSH agent session.
-
-## Telemetry
-
-The browser half sends one anonymous install heartbeat per UTC day to dsh-market.com: a random localStorage id plus this package's name, nothing else. The server stores only a salted hash of that id, never IP addresses, and exposes aggregate counts only. See [docs/telemetry.md](../../docs/telemetry.md) for the full contract.

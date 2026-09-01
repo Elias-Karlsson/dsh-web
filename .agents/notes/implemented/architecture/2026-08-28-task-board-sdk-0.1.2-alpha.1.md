@@ -1,35 +1,35 @@
-# Agent Note: Task board SDK 0.1.2-alpha.1 migration
+# Agent Note: Task board host ApiProxy integration
 
 Status: implemented
 
 ## Problem
 
-The approved SDK cohort removes the legacy Host API proxy and client runtime surfaces. The task board's execution, settings, and client option wiring therefore cannot typecheck or operate against the selected runtime until its imports, service injections, gateway protocol, and tests use the replacement contracts.
+The retired Typert session gateway no longer exposes the session operations needed to launch and reconcile Task Board executions. A task can no longer start or observe an isolated DSH session through that gateway.
 
 ## Decision
 
-Migrate only `packages/dsh-task-board` to the approved official SDK cohort `0.1.2-alpha.1`. Host execution uses the injected `TypertGateway` and `workspaceRegistry`; browser execution-target data uses the assembled Client Remote, Session and Workspace client services, and the official store/settings modules.
+`packages/dsh-task-board` consumes the host-local `apiProxy` service and its session and agent-preset methods. The runner creates, renames, prompts, lists, and reads session history through RPC envelopes, while the injected workspace registry remains authoritative for workspace validation.
 
-The Host runner dispatches unary methods through gateway namespaces and consumes direct business results. It opens `session/follow` through `TypertGateway.stream()`, consumes the opening snapshot, closes that short-lived iterator, and pages backward with the returned cursor to settle executions.
+A `workspace-attach-failed` create response can describe a session that is already live. The runner converts that response into `SessionLaunchError` with its returned session id so the ledger records and settles the session rather than orphaning it.
+
+The package declares DSH `>=0.1.0-rc.5`, the first supported release containing this ApiProxy surface.
 
 ## Alternatives considered
 
-Retaining `@deepseek-ai/dsh-host-apiproxy` or `@deepseek-ai/dsh-client-runtime` loses because those modules are deleted from the approved cohort.
+Keeping the Typert session gateway loses because its required `session/list`, follow, and page operations are absent from the deployed DSH host.
 
-Calling `session/follow` through `invoke()` loses because stream remotes are rejected on the unary carrier; the runner uses `stream()` instead.
+Importing the current ApiProxy package into this external fork loses because its lockfile belongs to an older SDK cohort. The fork uses a narrowed local interface over the injected service instead.
 
-Adding a workspace list RPC loses because the approved Host workspace API has no such RPC; the injected `WorkspaceRegistry.list()` is authoritative.
+Discarding a partial create failure loses because the host can publish the session before workspace attachment fails; the ledger must retain the returned id.
 
 ## Consequences
 
-Session create, rename, prompt, list, and page calls are dispatched as `{ namespace, method, args: { request } }`; `agentPresets/list` uses an empty args object and returns the direct roster.
+History pagination replaces the retired follow/page stream path. The runner treats unavailable list or history reads as pending and preserves its bounded scan memo.
 
-Workspace validation is local to the Host registry, whose rows use `id`; browser workspace rows continue to use `workspaceId`.
+Workspace and preset validation remain fail-closed before prompt delivery. Post-create failures, including reported partial creates, remain attached to the execution record and settle as failed.
 
-The package-local generated settings-form copy is adapted directly because this migration is intentionally scoped away from `shared/`; it must not be regenerated from the old shared source as part of this change.
-
-The client preset roster uses `remote.agentPresets.list()`, which returns a `RemoteResult`; a failed roster read leaves the previous picker options in place.
+The browser preset roster continues to use its existing client remote APIs; only host execution uses ApiProxy.
 
 ## Testing
 
-The task-board typecheck, full Vitest suite, tsdown build, and scoped `git diff --check` pass. The full suite reports 25 passed and 1 skipped test file (239 passed and 1 skipped tests).
+The package typecheck, 300-test Vitest suite with one native-power skip, and tsdown build pass. An isolated DSH trial verified manual and cron launches, terminal reconciliation, and ledger persistence across restart.

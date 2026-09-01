@@ -1,10 +1,10 @@
 // 领卡 prompt 来源声明包裹（issue #6）：续接卡片（freeze 存在）执行时，
 // 任务指令被来源声明模板强制包裹（冻结时间/来源会话/未经审查提示），
 // 并与 T4 交接包前言组合而非冲突。
-import type { TypertGateway } from '@deepseek-ai/dsh-api-gateway'
 import { describe, expect, it } from 'vitest'
 import { createTask, type TaskRecord } from '../src/core/tasks.ts'
 import { HostExecutionRunner } from '../src/host-runner.ts'
+import { makeApiProxy } from './api-proxy.fake.ts'
 
 function card(overrides: Partial<TaskRecord> = {}): TaskRecord {
   return {
@@ -14,20 +14,14 @@ function card(overrides: Partial<TaskRecord> = {}): TaskRecord {
 }
 
 function gatewayOf(promptPayloads: unknown[]) {
-  return {
-    invoke: async ({ namespace, method, args }: { namespace: string; method: string; args: Record<string, unknown> }) => {
-      if (namespace === 'workspace' && method === 'list') return { items: [{ workspaceId: 'ws-1' }] }
-      if (namespace === 'agentPresets' && method === 'list') return { presets: [] }
-      if (namespace === 'session' && method === 'create') return { sessionId: 'session-a' }
-      if (namespace === 'session' && method === 'rename') return { title: '续接卡', seq: 1 }
-      if (namespace === 'session' && method === 'prompt') {
-        const payload = args.request as Record<string, unknown>
-        promptPayloads.push(payload)
-        return { accepted: true }
-      }
-      return {}
+  return makeApiProxy({
+    sessionsCreate: async () => ({ sessionId: 'session-a' }),
+    sessionsRename: async () => ({ title: '续接卡', seq: 1 }),
+    sessionsPrompt: async payload => {
+      promptPayloads.push(payload)
+      return { accepted: true }
     },
-  } as unknown as TypertGateway
+  })
 }
 
 function promptTextOf(payloads: unknown[]): string {

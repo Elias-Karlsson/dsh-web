@@ -1,7 +1,6 @@
-import type { TypertGateway } from '@deepseek-ai/dsh-api-gateway'
 import { nextRunAtMs } from './core/schedule.ts'
 import { HostTaskLedger, type OpenedRun, type OpenExecutionReference } from './host-ledger.ts'
-import { HostExecutionRunner, SessionLaunchError, type SessionCommandDispatcher, type SessionSummary, type TaskBoardWorkspaceRegistry } from './host-runner.ts'
+import { HostExecutionRunner, SessionLaunchError, type SessionCommandDispatcher, type SessionSummary, type TaskBoardApiProxy, type TaskBoardWorkspaceRegistry } from './host-runner.ts'
 import { PowerInhibitor } from './power-inhibitor.ts'
 import { TASK_BOARD_SCHEMA_VERSION, type TaskBoardAction, type TaskBoardEventPayload, type TaskBoardSnapshot } from './protocol.ts'
 import type { TaskPermission } from './core/handover.ts'
@@ -25,7 +24,7 @@ export class TaskBoardHostService {
   private lastPowerJson = ''
   private readonly now: () => number
 
-  constructor(gateway: TypertGateway, options: {
+  constructor(api: TaskBoardApiProxy, options: {
     ledger?: HostTaskLedger
     power?: PowerInhibitor
     now?: () => number
@@ -34,7 +33,7 @@ export class TaskBoardHostService {
     sessionDefaultPermission?: TaskPermission
   } = {}) {
     this.ledger = options.ledger ?? new HostTaskLedger(undefined, undefined, { sessionDefaultPermission: options.sessionDefaultPermission })
-    this.runner = new HostExecutionRunner(gateway, options.commandDispatcher, options.workspaceRegistry)
+    this.runner = new HostExecutionRunner(api, options.commandDispatcher, options.workspaceRegistry)
     this.power = options.power ?? new PowerInhibitor()
     this.now = options.now ?? Date.now
     this.ledger.subscribe(() => {

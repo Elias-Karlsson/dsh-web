@@ -8,7 +8,6 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { TypertGateway } from '@deepseek-ai/dsh-api-gateway'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyUpdateTask } from '../src/core/use-cases/task-update.ts'
 import { createTask } from '../src/core/tasks.ts'
@@ -18,6 +17,7 @@ import { HostExecutionRunner } from '../src/host-runner.ts'
 import { HostTaskLedger } from '../src/host-ledger.ts'
 import { TaskBoardHostService } from '../src/host-service.ts'
 import { PowerInhibitor } from '../src/power-inhibitor.ts'
+import { makeApiProxy } from './api-proxy.fake.ts'
 
 const NOW = 1_700_000_000_000
 
@@ -112,15 +112,13 @@ describe('handover bundle: store and ledger parsing', () => {
 })
 
 function makeGateway(createSpy = vi.fn(async (_req?: unknown) => ({ sessionId: 'session-1' })), promptSpy = vi.fn(async (_req?: unknown) => ({ accepted: true }))) {
-  const invoke = vi.fn(async ({ namespace, method, args }: { namespace: string; method: string; args: Record<string, unknown> }) => {
-    if (namespace === 'workspace' && method === 'list') return { items: [{ workspaceId: 'ws-1' }, { workspaceId: 'ws-legacy' }] }
-    if (namespace === 'agentPresets' && method === 'list') return { presets: [{ id: 'preset-a' }, { id: 'preset-legacy' }] }
-    if (namespace === 'session' && method === 'create') return createSpy(args.request)
-    if (namespace === 'session' && method === 'rename') return { title: 't', seq: 1 }
-    if (namespace === 'session' && method === 'prompt') return promptSpy(args.request)
-    return {}
+  const gateway = makeApiProxy({
+    agentPresetsList: async () => ({ presets: [{ id: 'preset-a' }, { id: 'preset-legacy' }] }),
+    sessionsCreate: async payload => createSpy(payload),
+    sessionsRename: async () => ({ title: 't', seq: 1 }),
+    sessionsPrompt: async payload => ({ ...(await promptSpy(payload)), accepted: true as const }),
   })
-  return { gateway: { invoke } as unknown as TypertGateway, invoke, create: createSpy, prompt: promptSpy }
+  return { gateway, create: createSpy, prompt: promptSpy }
 }
 
 function makeService(ledger: HostTaskLedger, now: () => number) {
