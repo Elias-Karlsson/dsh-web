@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Adds a **Subagent roles** page to the web GUI's Settings panel: one card per subagent role (`subagent_fast`, `subagent_deep`, …) showing its ordered model fallback chain, with reorder, add, and remove — saved straight into the preset file (`~/.dsh/.agent-presets/model-roles/agent.cordis.yml` by default). Only the `routes:` blocks are rewritten; comments, personas, and every other row survive byte for byte. New subagent spawns pick the change up immediately — no rebuild or restart.
+Adds a **Subagent roles** page to the web GUI's Settings panel: one card per subagent role (`subagent_fast`, `subagent_deep`, …) with three tabs — **Chains** (the ordered model fallback chain, with reorder, add, and remove), **Spawn** (the parents allowed to spawn the role), and **Filter & prompt** (the persona and the `toolFilter`/`contextFilter` token lists) — saved straight into the preset file (`~/.dsh/.agent-presets/model-roles/agent.cordis.yml` by default). Only the targeted lines are rewritten; comments and every other row survive byte for byte. Roles can also be created (cloning filters and fallback codes from a template role, starting with no spawn parents and a single route) and deleted (references in other roles' filter lists and spawn-parent lists are stripped with them). New subagent spawns pick the change up immediately — no rebuild or restart.
 
 ## Why
 
@@ -12,8 +12,8 @@ The role chains decide which model a delegated subagent actually runs on, and in
 
 One package, both halves:
 
-- **Host half** mounts loopback-fenced exact-path routes on the host webserver: `GET /subagent-roles/api/status|models|roles` and `POST /subagent-roles/api/role|roles-batch`. Non-loopback peers get 403; wrong methods 405; invalid chains 400. The model catalog comes from `settings.yaml`; writes go through a parse → validate → rewrite → re-validate pipeline that touches only the target role's route lines.
-- **Browser half** contributes the settings section (slot `settings.section`, order 30): filter box, per-role save/revert, dirty counters, save-all batch. All edits stage locally until a save posts them.
+- **Host half** mounts loopback-fenced exact-path routes on the host webserver: `GET /subagent-roles/api/status|models|roles` and `POST /subagent-roles/api/role|roles-batch|role-create|role-delete|role-parents|role-persona|role-filters`. Non-loopback peers get 403; wrong methods 405; invalid input 400. The model catalog comes from `settings.yaml`; writes go through a parse → validate → rewrite → re-validate pipeline that touches only the targeted lines — route lines, one role's `allowedParentRoles:`/`persona:`/filter list lines, one appended role block, or one removed role block plus the references to it in other blocks. A new role clones `backgroundMode`, `maxDepth`, `toolFilter`, `contextFilter`, and the fallback `codes` from a template role, starts with `allowedParentRoles: []` (spawnable by no one until a parent is saved), and carries a single-route chain.
+- **Browser half** contributes the settings section (slot `settings.section`, order 30): filter box, the add-role form (name, persona, template role, initial model), three tabs per role card (Chains, Spawn, Filter & prompt), per-tab save/revert, per-role delete with confirmation, dirty counters, save-all batch. All edits stage locally until a save posts them.
 
 ## Install
 
@@ -38,4 +38,4 @@ dsh plugin --profile web add @linxin666/dsh-client-ui-subagent-roles@latest
 
 ## Security
 
-Reads and writes are fenced to literal loopback peers (socket address AND Host header, plus browser same-origin markers; X-Forwarded-For is never trusted). Access through a tailnet or LAN address must be listed explicitly in `trustedHosts`; anything unlisted still answers 403. The wire never accepts a `sessionId`-style graft: routes name provider/model pairs only, and the file surgery rewrites nothing outside the target `routes:` block.
+Reads and writes are fenced to literal loopback peers (socket address AND Host header, plus browser same-origin markers; X-Forwarded-For is never trusted). Access through a tailnet or LAN address must be listed explicitly in `trustedHosts`; anything unlisted still answers 403. The wire never accepts a `sessionId`-style graft: mutations name roles, provider/model pairs, and token lists only, and the file surgery rewrites nothing outside the targeted lines.

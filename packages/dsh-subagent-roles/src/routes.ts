@@ -1,7 +1,8 @@
 /**
  * Loopback-fenced HTTP routes for the subagent role matrix: read the preset's
- * role blocks and the settings.yaml model catalog, and rewrite one or several
- * role chains. Exact-path registrations for the host webServer seam.
+ * role blocks and the settings.yaml model catalog, and rewrite role chains,
+ * spawn parents, personas, filters, and whole role blocks. Exact-path
+ * registrations for the host webServer seam.
  * @module @linxin666/dsh-client-ui-subagent-roles/routes
  */
 
@@ -10,7 +11,17 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import { isLoopbackRequest } from './loopback.ts'
 import { readJsonBody, writeJson } from './http.ts'
-import { readAvailableModels, readRoles, replaceRoutes } from './roles-file.ts'
+import {
+  addRole,
+  deleteRole,
+  readAvailableModels,
+  readRoles,
+  replaceFilters,
+  replaceParents,
+  replacePersona,
+  replaceRoutes,
+  type RoleFilterUpdate,
+} from './roles-file.ts'
 
 /** Path prefix every route of this package mounts under. */
 export const SUBAGENT_ROLES_PREFIX = '/subagent-roles/api'
@@ -67,6 +78,25 @@ function parseUpdate(body: unknown): RoleUpdate {
   return { role: candidate.role, routes: (candidate.routes as RoleUpdate['routes']).map(parseWireRoute) }
 }
 
+/** Narrow an unknown JSON body to one `{ role }` mutation, throwing on bad input. */
+function parseRoleRef(body: unknown): string {
+  if (body === null || typeof body !== 'object') throw new Error('body must be an object')
+  const candidate = (body as { role?: unknown }).role
+  if (typeof candidate !== 'string' || candidate.trim() === '') throw new Error('role must be a non-empty string')
+  return candidate
+}
+
+/** Narrow a wire field to a deduped string array, throwing on bad input. */
+function parseStringList(value: unknown, field: string): string[] {
+  if (!Array.isArray(value)) throw new Error(`${field} must be an array`)
+  const out: string[] = []
+  for (const entry of value) {
+    if (typeof entry !== 'string' || entry.trim() === '') throw new Error(`${field} must contain non-empty strings`)
+    if (!out.includes(entry)) out.push(entry)
+  }
+  return out
+}
+
 /** Serialize the current role blocks for the wire. */
 function rolesPayload(deps: RolesRouteDeps): { ok: true; roles: unknown[] } {
   const blocks = readRoles(deps.presetPath)
@@ -77,17 +107,25 @@ function rolesPayload(deps: RolesRouteDeps): { ok: true; roles: unknown[] } {
       toolName: b.toolName,
       parents: b.parents,
       routes: b.routes,
+      persona: b.persona,
+      toolAllow: b.toolAllow,
+      contextFilter: b.contextFilter,
     })),
   }
 }
 
-/** Apply updates sequentially; the first failure discards the whole batch. */
+/** Apply chain updates sequentially; the first failure discards the whole batch. */
 function applyUpdates(deps: RolesRouteDeps, updates: readonly RoleUpdate[]): void {
   let text = readFileSync(deps.presetPath, 'utf8')
   for (const update of updates) {
     text = replaceRoutes(text, update.role, update.routes)
   }
   writeFileSync(deps.presetPath, text, 'utf8')
+}
+
+/** Run one surgery over the preset text and write the result back. */
+function applySurgery(deps: RolesRouteDeps, surgery: (text: string) => string): void {
+  writeFileSync(deps.presetPath, surgery(readFileSync(deps.presetPath, 'utf8')), 'utf8')
 }
 
 /**
@@ -119,6 +157,19 @@ export function makeRolesRoutes(deps: RolesRouteDeps): WebRoute[] {
       return undefined
     }
     return body
+  }
+
+  /** Shared POST mutation shape: guard, body, surgery, roles read-back. */
+  const mutation = (apply: (body: unknown) => void) => async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    if (!guard(req, res, 'POST')) return
+    const body = await readBody(req, res)
+    if (body === undefined) return
+    try {
+      apply(body)
+      writeJson(res, 200, rolesPayload(deps))
+    } catch (error: unknown) {
+      writeJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) })
+    }
   }
 
   return [
@@ -182,6 +233,74 @@ export function makeRolesRoutes(deps: RolesRouteDeps): WebRoute[] {
           writeJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) })
         }
       },
+    },
+    {
+      kind: 'exact',
+      path: SUBAGENT_ROLES_PREFIX + '/role-create',
+      handler: mutation(body => {
+        if (body === null || typeof body !== 'object') throw new Error('body must be an object')
+        const candidate = body as { role?: unknown; persona?: unknown; templateRole?: unknown; route?: unknown }
+        if (typeof candidate.role !== 'string' || candidate.role.trim() === '') throw new Error('role must be a non-empty string')
+        if (typeof candidate.persona !== 'string' || candidate.persona.trim() === '') throw new Error('persona must be a non-empty string')
+        if (typeof candidate.templateRole !== 'string' || candidate.templateRole.trim() === '') throw new Error('templateRole must be a non-empty string')
+        const route = parseWireRoute(candidate.route as string | { provider: string; model: string })
+        applySurgery(deps, text => addRole(text, { role: candidate.role as string, persona: candidate.persona as string, templateRole: candidate.templateRole as string, route }))
+      }),
+    },
+    {
+      kind: 'exact',
+      path: SUBAGENT_ROLES_PREFIX + '/role-delete',
+      handler: mutation(body => {
+        const role = parseRoleRef(body)
+        applySurgery(deps, text => deleteRole(text, role))
+      }),
+    },
+    {
+      kind: 'exact',
+      path: SUBAGENT_ROLES_PREFIX + '/role-parents',
+      handler: mutation(body => {
+        if (body === null || typeof body !== 'object') throw new Error('body must be an object')
+        const role = parseRoleRef(body)
+        const parents = parseStringList((body as { parents?: unknown }).parents, 'parents')
+        const known = new Set(readRoles(deps.presetPath).map(b => b.role))
+        for (const parent of parents) {
+          if (parent === role) throw new Error('a role cannot be its own parent')
+          if (parent !== 'main' && !known.has(parent)) throw new Error(`unknown parent role: ${parent}`)
+        }
+        applySurgery(deps, text => replaceParents(text, role, parents))
+      }),
+    },
+    {
+      kind: 'exact',
+      path: SUBAGENT_ROLES_PREFIX + '/role-persona',
+      handler: mutation(body => {
+        if (body === null || typeof body !== 'object') throw new Error('body must be an object')
+        const role = parseRoleRef(body)
+        const persona = (body as { persona?: unknown }).persona
+        if (typeof persona !== 'string' || persona.trim() === '') throw new Error('persona must be a non-empty string')
+        applySurgery(deps, text => replacePersona(text, role, persona))
+      }),
+    },
+    {
+      kind: 'exact',
+      path: SUBAGENT_ROLES_PREFIX + '/role-filters',
+      handler: mutation(body => {
+        if (body === null || typeof body !== 'object') throw new Error('body must be an object')
+        const role = parseRoleRef(body)
+        const candidate = body as {
+          toolAllow?: unknown
+          systemSections?: unknown
+          runtimeContexts?: unknown
+          denyMessageSourceKinds?: unknown
+        }
+        const filters: RoleFilterUpdate = {}
+        if (candidate.toolAllow !== undefined) filters.toolAllow = parseStringList(candidate.toolAllow, 'toolAllow')
+        if (candidate.systemSections !== undefined) filters.systemSections = parseStringList(candidate.systemSections, 'systemSections')
+        if (candidate.runtimeContexts !== undefined) filters.runtimeContexts = parseStringList(candidate.runtimeContexts, 'runtimeContexts')
+        if (candidate.denyMessageSourceKinds !== undefined) filters.denyMessageSourceKinds = parseStringList(candidate.denyMessageSourceKinds, 'denyMessageSourceKinds')
+        if (Object.keys(filters).length === 0) throw new Error('no filter fields provided')
+        applySurgery(deps, text => replaceFilters(text, role, filters))
+      }),
     },
   ]
 }
