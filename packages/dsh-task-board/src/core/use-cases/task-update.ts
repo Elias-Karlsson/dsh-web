@@ -8,7 +8,7 @@
  * back to the runtime default); an unknown permission string is ignored so
  * stale UI can never persist a value the execution service rejects.
  */
-import { freezeOf, isTaskPermission, normalizeTargetId, type TaskRecord, type TaskPermission } from '../tasks.ts'
+import { freezeOf, isTaskPermission, normalizeModelSelection, normalizeTargetId, type TaskRecord, type TaskPermission } from '../tasks.ts'
 import type { FreezeSnapshot } from '../freeze-snapshot.ts'
 import type { TaskHandoverInput } from '../handover.ts'
 
@@ -17,6 +17,8 @@ import type { TaskHandoverInput } from '../handover.ts'
  * continuation-card snapshot (restamping frozenAt); an explicit null clears it.
  */
 export type TaskUpdatePatch = Partial<Pick<TaskRecord, 'title' | 'description' | 'prompt' | 'workspaceId' | 'mode' | 'permission'>> & {
+  /** Exact model route applied after session creation; an explicit null clears it. */
+  model?: TaskRecord['model'] | null
   freeze?: FreezeSnapshot & { redacted?: boolean } | null
   /** Replaces the handover bundle (restamping bundledAt); an explicit null clears it. */
   handover?: TaskHandoverInput | null
@@ -68,9 +70,10 @@ export function applyUpdateTask(
 ): readonly TaskRecord[] {
   return tasks.map(task => {
     if (task.id !== id) return task
-    const { freeze: freezePatch, handover: handoverPatch, ...rest } = patch
+    const { freeze: freezePatch, handover: handoverPatch, model: _modelPatch, ...rest } = patch
     const workspaceId = 'workspaceId' in patch ? normalizeTargetId(patch.workspaceId) : undefined
     const mode = 'mode' in patch ? normalizeTargetId(patch.mode) : undefined
+    const model = 'model' in patch && patch.model !== null ? normalizeModelSelection(patch.model) : undefined
     const permission = 'permission' in patch ? normalizePermission(task.permission, patch.permission) : undefined
     const next: TaskRecord = { ...task, ...rest, updatedAt: now }
     // Content fields normalize like creation does (trimmed); an explicit
@@ -94,6 +97,7 @@ export function applyUpdateTask(
     }
     if (workspaceId !== undefined || 'workspaceId' in patch) next.workspaceId = workspaceId
     if (mode !== undefined || 'mode' in patch) next.mode = mode
+    if (model !== undefined || 'model' in patch) next.model = model
     if (permission !== undefined || 'permission' in patch) next.permission = permission
     return next
   })

@@ -42,7 +42,7 @@ function controller(): BoardController {
     boardOpen: true,
     archiveView: false,
     selectedTaskId: 'card-1',
-    executionOptions: { workspaces: [], presets: [] },
+    executionOptions: { workspaces: [], presets: [], models: [] },
     pendingTaskIds: [],
     host: { revision: 1, scheduler: { timeZone: 'UTC' }, power: { platform: 'linux', phase: 'unsupported', enabled: false, runningSessions: 0, armedSchedules: 0, sessionStateKnown: true }, sessionDefaultPermission: 'read-only' },
   }

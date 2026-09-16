@@ -1,5 +1,5 @@
 import type { TaskUpdatePatch } from './core/use-cases/task-update.ts'
-import { isTaskPermission, isTaskStatus, type NewTaskInput, type TaskPermission, type TaskRecord, type TaskStatus } from './core/tasks.ts'
+import { isTaskPermission, isTaskStatus, normalizeModelSelection, type NewTaskInput, type TaskModelSelection, type TaskPermission, type TaskRecord, type TaskStatus } from './core/tasks.ts'
 import { parseLedger } from './core/store.ts'
 import { sanitizeFreezeSnapshot, type FreezeSnapshot } from './core/freeze-snapshot.ts'
 import { sanitizeHandover, type TaskHandoverInput } from './core/handover.ts'
@@ -100,7 +100,20 @@ function optionalFiniteNumber(value: unknown): boolean {
   return value === undefined || (typeof value === 'number' && Number.isFinite(value))
 }
 
+/** Gate one exact model route from the wire or persisted ledger. */
+function modelPayload(value: unknown): TaskModelSelection | undefined {
+  const input = record(value)
+  if (input === undefined || !exactKeys(input, ['provider', 'model', 'reasoningEffort'])) return undefined
+  const candidate: TaskModelSelection = {
+    provider: input.provider as string,
+    model: input.model as string,
+    ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort as string }),
+  }
+  return normalizeModelSelection(candidate)
+}
+
 function validImportedKnownFields(value: Record<string, unknown>): boolean {
+  if (value.model !== undefined && modelPayload(value.model) === undefined) return false
   if (value.schedule !== undefined) {
     const schedule = record(value.schedule)
     if (schedule === undefined || typeof schedule.enabled !== 'boolean' || typeof schedule.cron !== 'string') return false
@@ -156,6 +169,7 @@ function importedTask(value: unknown): TaskRecord | undefined {
     }),
     ...(task.workspaceId === undefined ? {} : { workspaceId: task.workspaceId }),
     ...(task.mode === undefined ? {} : { mode: task.mode }),
+    ...(task.model === undefined ? {} : { model: task.model }),
     ...(task.permission === undefined ? {} : { permission: task.permission }),
     ...(task.archivedAt === undefined ? {} : { archivedAt: task.archivedAt }),
     ...(task.freeze === undefined ? {} : { freeze: task.freeze }),
@@ -193,9 +207,10 @@ function handoverPayload(value: unknown): TaskHandoverInput | undefined {
 
 function createInput(value: unknown): value is NewTaskInput {
   const input = record(value)
-  if (input === undefined || !exactKeys(input, ['title', 'description', 'prompt', 'workspaceId', 'mode', 'permission', 'schedule', 'freeze', 'handover'])) return false
+  if (input === undefined || !exactKeys(input, ['title', 'description', 'prompt', 'workspaceId', 'mode', 'model', 'permission', 'schedule', 'freeze', 'handover'])) return false
   if (typeof input.title !== 'string' || typeof input.description !== 'string' || typeof input.prompt !== 'string') return false
   if (!optionalString(input.workspaceId) || !optionalString(input.mode)) return false
+  if (input.model !== undefined && modelPayload(input.model) === undefined) return false
   if (input.permission !== undefined && !isTaskPermission(input.permission)) return false
   if (input.freeze !== undefined && freezePayload(input.freeze) === undefined) return false
   if (input.handover !== undefined && handoverPayload(input.handover) === undefined) return false
@@ -209,10 +224,11 @@ function createInput(value: unknown): value is NewTaskInput {
 
 function updatePatch(value: unknown): boolean {
   const patch = record(value)
-  if (patch === undefined || !exactKeys(patch, ['title', 'description', 'prompt', 'workspaceId', 'mode', 'permission', 'freeze', 'handover'])) return false
+  if (patch === undefined || !exactKeys(patch, ['title', 'description', 'prompt', 'workspaceId', 'mode', 'model', 'permission', 'freeze', 'handover'])) return false
   for (const key of ['title', 'description', 'prompt', 'workspaceId', 'mode'] as const) {
     if (!optionalString(patch[key])) return false
   }
+  if (patch.model !== undefined && patch.model !== null && modelPayload(patch.model) === undefined) return false
   if (patch.permission !== undefined && !isTaskPermission(patch.permission)) return false
   // null clears the snapshot; an object must pass the freeze gate.
   if (patch.freeze !== undefined && patch.freeze !== null && freezePayload(patch.freeze) === undefined) return false
@@ -266,7 +282,10 @@ function parseEnvelopeAction(value: unknown): TaskBoardActionEnvelope | undefine
       const input = action.input as NewTaskInput
       const freeze = input.freeze === undefined ? undefined : freezePayload(input.freeze)
       const handover = input.handover === undefined ? undefined : handoverPayload(input.handover)
-      const sanitized = freeze === undefined && handover === undefined ? input : { ...input, ...(freeze === undefined ? {} : { freeze }), ...(handover === undefined ? {} : { handover }) }
+      const model = input.model === undefined ? undefined : modelPayload(input.model)
+      const sanitized = freeze === undefined && handover === undefined && model === undefined
+        ? input
+        : { ...input, ...(freeze === undefined ? {} : { freeze }), ...(handover === undefined ? {} : { handover }), ...(model === undefined ? {} : { model }) }
       return { requestId: envelope.requestId, action: { kind: 'create', id: action.id as string, input: sanitized } }
     }
     case 'update': {
@@ -275,8 +294,9 @@ function parseEnvelopeAction(value: unknown): TaskBoardActionEnvelope | undefine
       const patch = action.patch as TaskUpdatePatch
       const freeze = patch.freeze === undefined || patch.freeze === null ? patch.freeze : freezePayload(patch.freeze)
       const handover = patch.handover === undefined || patch.handover === null ? patch.handover : handoverPayload(patch.handover)
-      const sanitized = ('freeze' in patch && freeze !== patch.freeze) || ('handover' in patch && handover !== patch.handover)
-        ? { ...patch, ...(freeze === patch.freeze ? {} : { freeze }), ...(handover === patch.handover ? {} : { handover }) }
+      const model = patch.model === undefined || patch.model === null ? undefined : modelPayload(patch.model)
+      const sanitized = ('freeze' in patch && freeze !== patch.freeze) || ('handover' in patch && handover !== patch.handover) || 'model' in patch
+        ? { ...patch, ...(freeze === patch.freeze ? {} : { freeze }), ...(handover === patch.handover ? {} : { handover }), model }
         : patch
       return { requestId: envelope.requestId, action: { kind: 'update', taskId, patch: sanitized } }
     }

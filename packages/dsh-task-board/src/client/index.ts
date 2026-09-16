@@ -130,6 +130,38 @@ async function readPresetRoster(
 }
 
 /**
+ * One provider group the model picker groups its options under.
+ *
+ * Matches the wire shape served by `connection.api.llm.models({})` (the same
+ * shape served by `session.models`). The picker reads it loosely so an unknown
+ * field (the host may extend the row) never aborts mounting.
+ */
+interface ModelCatalogGroup {
+  id: string
+  name: string
+  models: readonly { id: string; name?: string }[]
+}
+
+/**
+ * Read the provider-grouped model catalog through the connection RPC face
+ * (`connection.api.llm.models`). Same graceful-fallback pattern as
+ * {@link readPresetRoster}: undefined when the host serves no catalog, so the
+ * caller leaves the picker options untouched instead of erroring.
+ */
+async function readModelCatalog(
+  ctx: ClientContext,
+): Promise<{ ok: boolean; groups: readonly ModelCatalogGroup[] } | undefined> {
+  const connection = ctx.get('connection') as unknown as {
+    api?: { llm?: { models(request: Record<string, never>): Promise<{ result: { ok: boolean; value?: { groups?: readonly ModelCatalogGroup[] } } }> } }
+  }
+  const llm = connection.api?.llm
+  if (llm === undefined) return undefined
+  const response = await llm.models({})
+  if (!response.result.ok || response.result.value === undefined) return { ok: false, groups: [] }
+  return { ok: true, groups: response.result.value.groups ?? [] }
+}
+
+/**
  * Mount the task board.
  * @param ctx - client root context (services: sessions, workspaces).
  */
@@ -246,6 +278,28 @@ export function apply(ctx: ClientContext): void {
     }
     void pushPresetOptions()
     disposers.push(ctx.on('connection/reset', () => { void pushPresetOptions() }))
+    // Model catalog: one provider-grouped list driving the model picker.
+    // Same retry-on-reconnect policy as the preset roster — a deployment
+    // change may serve a different catalog.
+    const pushModelCatalog = async (): Promise<void> => {
+      try {
+        const catalog = await readModelCatalog(ctx)
+        if (catalog === undefined || !catalog.ok) return
+        controller.setExecutionOptions({
+          models: catalog.groups.map(group => ({
+            id: group.id,
+            name: group.name,
+            models: group.models.map(model => ({ id: model.id, name: model.name })),
+          })),
+        })
+      } catch (error) {
+        // A failed catalog read leaves the previous options in place; the
+        // picker stays usable and the next reconnect retries the read.
+        console.error('[dsh-task-board] model catalog read failed', error)
+      }
+    }
+    void pushModelCatalog()
+    disposers.push(ctx.on('connection/reset', () => { void pushModelCatalog() }))
     try {
       disposers.push(mountSidebarEntry(controller, ctx.locale))
       disposers.push(mountBoard(controller, ctx.locale))

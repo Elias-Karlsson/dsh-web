@@ -10,6 +10,13 @@ import type { TaskHandover, TaskHandoverInput } from './handover.ts'
 /** Task lifecycle status, one per kanban column. */
 export type TaskStatus = 'backlog' | 'todo' | 'running' | 'done' | 'failed'
 
+/** Exact provider/model route a task pins for its execution session. */
+export interface TaskModelSelection {
+  provider: string
+  model: string
+  reasoningEffort?: string
+}
+
 /**
  * One real execution attempt: the run's own id, the dsh session that ran it
  * (filled once the session is created), and the settled outcome once the
@@ -74,6 +81,13 @@ export interface ScheduleRule {
   nextRunAt: number | undefined
   /** Instant of the latest scheduled trigger (ms epoch). */
   lastTriggeredAt: number | undefined
+  /**
+   * When `'reuse'`, scheduled runs prompt the pinned `sessionId` instead of
+   * opening a fresh session; absent means every run starts fresh.
+   */
+  sessionMode?: 'reuse'
+  /** Session pinned for reuse; stamped by the Host after each scheduled run. */
+  sessionId?: string
 }
 
 /**
@@ -127,6 +141,11 @@ export interface TaskRecord {
    * `agentPreset.list` id); absent means the deployment default.
    */
   mode?: string
+  /**
+   * Exact provider/model route applied through `session.selectModel` after
+   * the execution session is created; absent leaves the session default.
+   */
+  model?: TaskModelSelection
   /**
    * Permission preset applied to the execution session through the
    * `/permission <id>` slash command; absent leaves the session default.
@@ -183,6 +202,8 @@ export interface NewTaskInput {
   workspaceId?: string
   /** Agent preset the execution session must be composed from; empty/absent = deployment default. */
   mode?: string
+  /** Exact model route applied after session creation; absent = session default. */
+  model?: TaskModelSelection
   /** Permission preset applied to the execution session; absent = session default. */
   permission?: TaskPermission
   /**
@@ -239,6 +260,20 @@ export function normalizeTargetId(value: string | undefined): string | undefined
   return trimmed === undefined || trimmed === '' ? undefined : trimmed
 }
 
+/** Normalize one exact model route; blank provider/model collapses the pin. */
+export function normalizeModelSelection(value: TaskModelSelection | undefined): TaskModelSelection | undefined {
+  if (value === undefined) return undefined
+  const provider = value.provider.trim()
+  const model = value.model.trim()
+  if (provider === '' || model === '') return undefined
+  const reasoningEffort = value.reasoningEffort?.trim()
+  return {
+    provider,
+    model,
+    ...reasoningEffort === undefined || reasoningEffort === '' ? {} : { reasoningEffort },
+  }
+}
+
 /**
  * Build the persisted freeze snapshot from a sanitized input, stamping the
  * freeze instant (shared by the create and update use cases).
@@ -270,6 +305,7 @@ export function createTask(input: NewTaskInput, now: number, id: string): TaskRe
     executions: [],
     workspaceId: normalizeTargetId(input.workspaceId),
     mode: normalizeTargetId(input.mode),
+    model: normalizeModelSelection(input.model),
     permission: isTaskPermission(input.permission) ? input.permission : undefined,
     ...(input.freeze === undefined ? {} : { freeze: freezeOf(input.freeze, now) }),
     ...(input.handover === undefined ? {} : { handover: { ...input.handover, bundledAt: now } }),
@@ -298,11 +334,15 @@ export function withSchedule(
     cron: current?.cron ?? '',
     nextRunAt: current?.nextRunAt,
     lastTriggeredAt: current?.lastTriggeredAt,
+    sessionMode: current?.sessionMode,
+    sessionId: current?.sessionId,
   }
   if ('enabled' in patch) schedule.enabled = patch.enabled ?? false
   if ('cron' in patch) schedule.cron = patch.cron ?? ''
   if ('nextRunAt' in patch) schedule.nextRunAt = patch.nextRunAt
   if ('lastTriggeredAt' in patch) schedule.lastTriggeredAt = patch.lastTriggeredAt
+  if ('sessionMode' in patch) schedule.sessionMode = patch.sessionMode
+  if ('sessionId' in patch) schedule.sessionId = patch.sessionId
   return { ...task, updatedAt: now, schedule }
 }
 

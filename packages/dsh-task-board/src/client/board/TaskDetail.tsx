@@ -59,7 +59,7 @@ function ExecutionRow({ execution, timeZone, onOpen }: { execution: ExecutionRec
   )
 }
 
-/** The execution-target editor: workspace / mode / permission pickers. */
+/** The execution-target editor: workspace / mode / model / permission pickers. */
 function ExecutionSettingsSection({ controller, task, pending }: { controller: BoardController; task: TaskRecord; pending: boolean }) {
   const [options, setOptions] = useState(controller.getSnapshot().executionOptions)
   useEffect(
@@ -68,12 +68,17 @@ function ExecutionSettingsSection({ controller, task, pending }: { controller: B
   )
   const workspaceId = task.workspaceId ?? ''
   const mode = task.mode ?? ''
+  const model = task.model
+  const modelValue = model === undefined ? '' : `${model.provider}/${model.model}`
   const permission = task.permission ?? ''
   // A pinned target may disappear from the runtime (workspace deleted,
   // preset removed); keep it selectable as a stale row instead of silently
   // dropping it, so the user sees exactly what the task will ask for.
   const workspaceKnown = workspaceId === '' || options.workspaces.some(item => item.workspaceId === workspaceId)
   const modeKnown = mode === '' || options.presets.some(item => item.id === mode)
+  const modelKnown = model === undefined || options.models.some(group =>
+    group.id === model.provider && group.models.some(item => item.id === model.model),
+  )
   return (
     <section className={css.detailSection}>
       <h4>{t('detail.executionSettings')}</h4>
@@ -113,6 +118,37 @@ function ExecutionSettingsSection({ controller, task, pending }: { controller: B
         </select>
       </label>
       <label className={css.field}>
+        <span className={css.fieldLabel}>{t('new.model')}</span>
+        <select
+          className={css.select}
+          value={modelValue}
+          disabled={pending}
+          onChange={event => {
+            const value = event.target.value
+            if (value === '') {
+              void controller.updateTask(task.id, { model: null })
+              return
+            }
+            const slashIndex = value.indexOf('/')
+            const provider = slashIndex === -1 ? value : value.slice(0, slashIndex)
+            const modelId = slashIndex === -1 ? '' : value.slice(slashIndex + 1)
+            void controller.updateTask(task.id, { model: { provider, model: modelId } })
+          }}
+        >
+          <option value="">{t('exec.model.default')}</option>
+          {!modelKnown && <option value={modelValue}>{modelValue}{t('exec.mode.removed')}</option>}
+          {options.models.map(group => (
+            <optgroup key={group.id} label={group.name}>
+              {group.models.map(modelEntry => (
+                <option key={`${group.id}/${modelEntry.id}`} value={`${group.id}/${modelEntry.id}`}>
+                  {modelEntry.name ?? modelEntry.id}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      <label className={css.field}>
         <span className={css.fieldLabel}>{t('new.permission')}</span>
         <select
           className={css.select}
@@ -135,6 +171,7 @@ function ScheduleSection({ controller, task, pending }: { controller: BoardContr
   const schedule = task.schedule
   const [cron, setCron] = useState(schedule?.cron ?? '0 9 * * *')
   const [enabled, setEnabled] = useState(schedule?.enabled ?? false)
+  const [reuse, setReuse] = useState(schedule?.sessionMode === 'reuse')
   const [nextRunAt, setNextRunAt] = useState<number | undefined>(schedule?.nextRunAt)
   const [lastTriggeredAt, setLastTriggeredAt] = useState<number | undefined>(schedule?.lastTriggeredAt)
   const [error, setError] = useState<string | undefined>(undefined)
@@ -145,10 +182,11 @@ function ScheduleSection({ controller, task, pending }: { controller: BoardContr
   useEffect(() => {
     setCron(schedule?.cron ?? '0 9 * * *')
     setEnabled(schedule?.enabled ?? false)
+    setReuse(schedule?.sessionMode === 'reuse')
     setNextRunAt(schedule?.nextRunAt)
     setLastTriggeredAt(schedule?.lastTriggeredAt)
     setError(undefined)
-  }, [task.id, schedule?.enabled, schedule?.cron, schedule?.nextRunAt, schedule?.lastTriggeredAt])
+  }, [task.id, schedule?.enabled, schedule?.cron, schedule?.sessionMode, schedule?.nextRunAt, schedule?.lastTriggeredAt])
 
   /** Validate + persist the current cron text (Enter or blur). */
   const saveCron = (value: string): void => {
@@ -184,6 +222,22 @@ function ScheduleSection({ controller, task, pending }: { controller: BoardContr
     controller.setSchedule(task.id, { cron: preset })
   }
 
+  /** Pin scheduled runs to one reused session, or switch back to fresh ones. */
+  const toggleReuse = (next: boolean): void => {
+    const trimmed = cron.trim()
+    // Without a stored rule the use case still needs a valid cron to pass.
+    if (schedule === undefined && (trimmed === '' || !isValidCron(trimmed))) {
+      setError(t('detail.schedule.invalid'))
+      return
+    }
+    setError(undefined)
+    const submitted = controller.setSchedule(task.id, {
+      sessionMode: next ? 'reuse' : 'fresh',
+      ...(schedule === undefined ? { cron: trimmed } : {}),
+    })
+    if (submitted && !controller.isHostBacked()) setReuse(next)
+  }
+
   const nextLabel = !enabled || nextRunAt === undefined
     ? t('detail.schedule.notScheduled')
     : nextRunAt <= Date.now()
@@ -202,6 +256,15 @@ function ScheduleSection({ controller, task, pending }: { controller: BoardContr
           onChange={event => { toggleEnabled(event.target.checked) }}
         />
         <span>{t('detail.schedule.enable')}</span>
+      </label>
+      <label className={css.scheduleToggle}>
+        <input
+          type="checkbox"
+          checked={reuse}
+          disabled={pending}
+          onChange={event => { toggleReuse(event.target.checked) }}
+        />
+        <span>{t('detail.schedule.reuseSession')}</span>
       </label>
       <div className={css.scheduleRow}>
         <input

@@ -74,10 +74,25 @@ export interface ExecutionPresetOption {
   isDefault: boolean
 }
 
+/** One model the execution-target model picker offers. */
+export interface ExecutionModelOption {
+  id: string
+  name?: string
+}
+
+/** One provider group the model picker groups its options under. */
+export interface ExecutionModelGroupOption {
+  id: string
+  name: string
+  models: readonly ExecutionModelOption[]
+}
+
 /** The execution-target option sets the UI feeds into the controller. */
 export interface ExecutionOptionsSnapshot {
   workspaces: readonly ExecutionWorkspaceOption[]
   presets: readonly ExecutionPresetOption[]
+  /** Provider-grouped model catalog for the execution-target model picker. */
+  models: readonly ExecutionModelGroupOption[]
 }
 
 /** Immutable controller snapshot for UI subscriptions. */
@@ -129,7 +144,7 @@ export class BoardController {
   private boardOpen = false
   private archiveView = false
   private selectedTaskId: string | undefined
-  private executionOptions: ExecutionOptionsSnapshot = { workspaces: [], presets: [] }
+  private executionOptions: ExecutionOptionsSnapshot = { workspaces: [], presets: [], models: [] }
   private listeners = new Set<() => void>()
   private disposers: Array<() => void> = []
   private readonly now: () => number
@@ -362,7 +377,7 @@ export class BoardController {
    * @param patch - fields to change (absent fields keep their current value).
    * @returns true when applied, false when rejected (invalid cron / unknown task).
    */
-  setSchedule(id: string, patch: { enabled?: boolean; cron?: string }): boolean {
+  setSchedule(id: string, patch: { enabled?: boolean; cron?: string; sessionMode?: 'fresh' | 'reuse' }): boolean {
     const { tasks, applied } = applySetSchedule(this.tasks, id, patch, this.now())
     if (!applied) return false
     if (this.deps.transport !== undefined) {

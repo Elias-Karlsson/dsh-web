@@ -79,7 +79,7 @@ function seedTask(store: InMemoryTaskStore, overrides: Partial<Parameters<typeof
 describe('BoardController execution options', () => {
   it('starts with empty picker option sets and merges partial updates', () => {
     const { controller } = makeController()
-    expect(controller.getSnapshot().executionOptions).toEqual({ workspaces: [], presets: [] })
+    expect(controller.getSnapshot().executionOptions).toEqual({ workspaces: [], presets: [], models: [] })
     controller.setExecutionOptions({ workspaces: [{ workspaceId: 'ws-1', title: 'One' }] })
     expect(controller.getSnapshot().executionOptions.workspaces).toEqual([{ workspaceId: 'ws-1', title: 'One' }])
     expect(controller.getSnapshot().executionOptions.presets).toEqual([])
@@ -87,6 +87,7 @@ describe('BoardController execution options', () => {
     expect(controller.getSnapshot().executionOptions).toEqual({
       workspaces: [{ workspaceId: 'ws-1', title: 'One' }],
       presets: [{ id: 'anchored', isDefault: true }],
+      models: [],
     })
   })
 

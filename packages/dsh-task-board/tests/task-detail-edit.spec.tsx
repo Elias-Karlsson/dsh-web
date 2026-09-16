@@ -40,7 +40,7 @@ function controllerFake(
     boardOpen: true,
     archiveView: false,
     selectedTaskId: taskRecord.id,
-    executionOptions: { workspaces: [], presets: [] },
+    executionOptions: { workspaces: [], presets: [], models: [] },
     pendingTaskIds: [],
   }
   const controller = {

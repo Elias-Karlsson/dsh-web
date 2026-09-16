@@ -10,7 +10,7 @@
  * localStorage backend.
  */
 import { isValidCron } from './schedule.ts'
-import { isTaskPermission, isTaskStatus, normalizeTargetId, type ScheduleRule, type TaskFreeze, type TaskRecord, type TaskPermission, type TaskStatus } from './tasks.ts'
+import { isTaskPermission, isTaskStatus, normalizeModelSelection, normalizeTargetId, type ScheduleRule, type TaskFreeze, type TaskRecord, type TaskPermission, type TaskStatus } from './tasks.ts'
 import type { TaskHandover } from './handover.ts'
 import { sanitizeFreezeSnapshot } from './freeze-snapshot.ts'
 import { sanitizeHandover } from './handover.ts'
@@ -65,6 +65,12 @@ function isTaskRecordShape(value: unknown): value is Omit<TaskRecord, 'status'> 
   if (record.workspaceId !== undefined && typeof record.workspaceId !== 'string') return false
   if (record.mode !== undefined && typeof record.mode !== 'string') return false
   if (record.permission !== undefined && typeof record.permission !== 'string') return false
+  if (record.model !== undefined) {
+    if (typeof record.model !== 'object' || record.model === null || Array.isArray(record.model)) return false
+    const model = record.model as Record<string, unknown>
+    if (typeof model.provider !== 'string' || typeof model.model !== 'string') return false
+    if (model.reasoningEffort !== undefined && typeof model.reasoningEffort !== 'string') return false
+  }
   if (!Array.isArray(record.executions)) return false
   for (const execution of record.executions) {
     if (typeof execution !== 'object' || execution === null) return false
@@ -183,6 +189,7 @@ export function parseLedger(raw: string | null): TaskRecord[] {
     // fall back to the session default instead of dropping the row.
     task.workspaceId = normalizeTargetId(row.workspaceId)
     task.mode = normalizeTargetId(row.mode)
+    task.model = normalizeModelSelection(row.model)
     task.archivedAt = typeof row.archivedAt === 'number' && Number.isFinite(row.archivedAt) ? row.archivedAt : undefined
     task.permission = isTaskPermission(row.permission) ? row.permission as TaskPermission : undefined
     task.freeze = normalizeFreeze(row.freeze)

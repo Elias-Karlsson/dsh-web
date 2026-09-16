@@ -5,12 +5,17 @@
  * the core cron parser (schedule.ts) and the withSchedule transition.
  */
 import { isValidCron, nextRunAtMs } from '../schedule.ts'
-import { withSchedule, type TaskRecord } from '../tasks.ts'
+import { withSchedule, type ScheduleRule, type TaskRecord } from '../tasks.ts'
 
 /** Fields the schedule use case may change on a rule. */
 export interface SetSchedulePatch {
   enabled?: boolean
   cron?: string
+  /**
+   * `'reuse'` pins scheduled runs to one session, `'fresh'` clears the pin
+   * (and any pinned session); absent keeps the current mode.
+   */
+  sessionMode?: 'fresh' | 'reuse'
 }
 
 /** Result of arming/disarming a rule. */
@@ -44,9 +49,16 @@ export function applySetSchedule(
   const enabled = patch.enabled ?? current?.enabled ?? false
   const nextRunAt = enabled ? nextRunAtMs(cron, now) : undefined
   if (enabled && nextRunAt === undefined) return { tasks, applied: false }
+  // 'fresh' must clear the mode and the pinned session: withSchedule only
+  // overwrites keys present in the patch, so they go in as explicit undefined.
+  const sessionPatch: Partial<ScheduleRule> = patch.sessionMode === undefined
+    ? {}
+    : patch.sessionMode === 'reuse'
+      ? { sessionMode: 'reuse' }
+      : { sessionMode: undefined, sessionId: undefined }
   return {
     tasks: tasks.map(candidate =>
-      candidate.id === id ? withSchedule(candidate, { enabled, cron, nextRunAt }, now) : candidate),
+      candidate.id === id ? withSchedule(candidate, { enabled, cron, nextRunAt, ...sessionPatch }, now) : candidate),
     applied: true,
   }
 }
