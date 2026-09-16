@@ -109,6 +109,11 @@
     - id: web-ui-session-archive
       name: '@linxin666/dsh-session-archive'
 
+# from ../dsh-subagent-roles
+- insert:
+    - id: web-ui-subagent-roles
+      name: '@linxin666/dsh-client-ui-subagent-roles'
+
 # from ../skins/skin-center
 - insert:
     - id: web-ui-skin-center

@@ -68,6 +68,7 @@ const PACKAGES = [
   { pkg: 'dsh-session-archive', files: [{ file: 'src/client/locales.ts', shape: 'zh-en' }] },
   { pkg: 'dsh-skill-explorer', files: [{ file: 'src/client/locales.ts', shape: 'zh-en' }] },
   { pkg: 'dsh-ssh', files: [{ file: 'src/client/locales.ts', shape: 'zh-en' }] },
+  { pkg: 'dsh-subagent-roles', files: [{ file: 'src/client/locales.ts', shape: 'zh-en' }] },
   { pkg: 'dsh-task-board', files: [{ file: 'src/client/locales.ts', shape: 'zh-en' }] },
   { pkg: 'dsh-tool-describe-image', files: [{ file: 'src/client/locales.ts', shape: 'dictionaries' }] },
   { pkg: 'dsh-usage', files: [{ file: 'src/client/locales.ts', shape: 'zh-en' }] },

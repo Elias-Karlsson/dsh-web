@@ -18,6 +18,7 @@ import { ru as sessionId } from './session-id.ts'
 import { ru as sessionArchive } from './session-archive.ts'
 import { ru as skillExplorer } from './skill-explorer.ts'
 import { ru as ssh } from './ssh.ts'
+import { ru as subagentRoles } from './subagent-roles.ts'
 import { ru as taskBoard } from './task-board.ts'
 import { ru as describeImage } from './tool-describe-image.ts'
 import { ru as usage } from './usage.ts'
@@ -37,6 +38,7 @@ export const ruDictionaries: Record<string, Record<string, string>> = {
   'dsh-web-ui-session-archive': sessionArchive,
   'dsh-skill-explorer': skillExplorer,
   'dsh-ssh': ssh,
+  'subagent-roles': subagentRoles,
   'task-board': taskBoard,
   'describe-image': describeImage,
   'dsh-web-ui-usage': usage,

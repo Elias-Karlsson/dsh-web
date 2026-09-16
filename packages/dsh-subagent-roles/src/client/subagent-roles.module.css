@@ -1,0 +1,270 @@
+/* Subagent role matrix: settings-section layout on the web GUI design tokens. */
+
+.matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: var(--dsw-font-family);
+  color: var(--dsw-alias-label-primary);
+}
+
+.matrixHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.matrixTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.matrixIntro {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+  max-width: 72ch;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbarSpacer {
+  flex: 1;
+}
+
+.searchInput {
+  flex: 0 1 320px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-2);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  outline: none;
+}
+
+.searchInput:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.dirtyBadge {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: var(--dsw-alias-state-warn-primary);
+  border: 1px solid var(--dsw-alias-state-warn-primary);
+}
+
+.primaryButton {
+  padding: 6px 14px;
+  font-size: 13px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--dsw-alias-label-primary-foreground);
+  background: var(--dsw-alias-button-info-fill);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--dsw-alias-button-info-hover);
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ghostButton {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2);
+}
+
+.ghostButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.ghostButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.statusLine {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.errorLine {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.rolesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 12px;
+}
+
+.roleCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--dsw-alias-bg-layer-2);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+}
+
+.roleCardDirty {
+  border-color: var(--dsw-alias-state-warn-primary);
+}
+
+.roleHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.roleTitleGroup {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.roleTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.roleTool {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.roleParents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.parentBadge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.routeList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.routeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l1);
+}
+
+.routeIndex {
+  flex: 0 0 18px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.routeProvider {
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: var(--dsw-alias-state-business-primary);
+  border: 1px solid var(--dsw-alias-border-l3);
+}
+
+.routeModel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-family: var(--dsw-font-family-monospace, monospace);
+}
+
+.routeActions {
+  display: flex;
+  gap: 2px;
+}
+
+.iconButton {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.iconButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.chainWarning {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.roleFooter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.addSelect {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-2);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+}
+
+.cardActions {
+  display: flex;
+  gap: 6px;
+}
